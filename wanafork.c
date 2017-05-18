@@ -116,6 +116,7 @@ void bin2hex(char *s, void *in, int len) {
   DWORD outlen=0;
   LPTSTR out;
   
+  #ifdef DEBUG
   printf ("\n  [ %s\n\n", s);
   
   if (CryptBinaryToString(
@@ -133,7 +134,8 @@ void bin2hex(char *s, void *in, int len) {
       }
       free(out);
     }      
-  } 
+  }
+  #endif  
 }
 
 // is file wana crypt archive
@@ -304,12 +306,14 @@ void gen_rsa_key (void) {
     
     // acquire a crypto provider context
     if (CryptAcquireContext(&prov,
-          NULL, MS_ENH_RSA_AES_PROV, PROV_RSA_AES,
-          CRYPT_VERIFYCONTEXT));
+          NULL, NULL, PROV_RSA_AES,
+          CRYPT_VERIFYCONTEXT))
     {          
       printf ("\n  [ acquired crypto provider");
       
       // generate 2048-bit RSA key pair
+      // depending on version of OS, there might
+      // be limit on size of key
       if (CryptGenKey(prov, AT_KEYEXCHANGE,
         (WC_RSA_KEY_LEN << 16) | CRYPT_EXPORTABLE, &key))
       {        
@@ -326,9 +330,9 @@ void gen_rsa_key (void) {
         export_rsa_key(prov, key, "00000000.eky", PRIVATEKEYBLOB,  TRUE);
         
         CryptDestroyKey(key);
-      }
+      } else xstrerror("CryptGenKey");
       CryptReleaseContext(prov, 0);      
-    }  
+    } else xstrerror("CryptAcquireContext");  
 }
 
 // generate an AES-128 key or obtain one from archive
@@ -402,7 +406,7 @@ aes_key_t* get_aes_key(HCRYPTPROV prov, HCRYPTKEY rsa_key, const char *file)
       
       // set to use CBC mode
       CryptSetKeyParam(aes_key->key, KP_MODE, (PBYTE)&mode, 0);
-    }
+    } else xstrerror("CryptImportKey");
     
     // fingers crossed :P
     return aes_key;
@@ -610,7 +614,7 @@ void encrypt_file (const char *infile, int enc)
     
     // acquire a crypto provider (same used by ransomware)
     if (CryptAcquireContext(&prov,
-          NULL, MS_ENH_RSA_AES_PROV, PROV_RSA_AES,
+          NULL, NULL, PROV_RSA_AES,
           CRYPT_VERIFYCONTEXT))
     {
       key_file = (enc==WC_ENCRYPT) ? WC_PUBLIC_KEY : WC_PRIVATE_KEY;
@@ -633,11 +637,11 @@ void encrypt_file (const char *infile, int enc)
         }       
         // release rsa key object
         CryptDestroyKey(rsa_key);
-      }
+      } 
       printf ("\n  [ releasing provider");      
       // release provider
       CryptReleaseContext(prov, 0);
-    }      
+    } else xstrerror("CryptAcquireContext");      
 }
 
 char* getparam (int argc, char *argv[], int *i)
